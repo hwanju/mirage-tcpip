@@ -114,7 +114,7 @@ module Make(Time:V1_LWT.TIME) = struct
     return ()
 
   let tick t (i:action) =
-    (* printf "%s  - %s ->  " (to_string t) (action_to_string i); *)
+    printf "%s  - %s ->  " (to_string t) (action_to_string i);
     let diffone x y = Sequence.incr y = x in
     let tstr s (i:action) =
       match s, i with
@@ -151,5 +151,5 @@ module Make(Time:V1_LWT.TIME) = struct
       | x, _ -> x
     in
     t.state <- tstr t.state i
-    (* ;  printf "%s\n%!" (to_string t) *)
+    ;  printf "%s\n%!" (to_string t)
 end
