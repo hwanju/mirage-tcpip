@@ -159,6 +159,7 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
 
     (* Process an incoming TCP packet that has an active PCB *)
     let input t pkt (pcb,_) =
+      printf "[DEBUG] Rx.input: port=(%d:%d)\n" pcb.id.local_port pcb.id.dest_port;
       match verify_checksum pcb.id pkt with
       | false -> return (printf "RX.input: checksum error\n%!")
       | true ->
@@ -182,6 +183,7 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
       (* Thread to monitor application receive and pass it up *)
       let rec rx_application_t () =
         lwt data, winadv = Lwt_mvar.take rx_data in
+        printf "[DEBUG] Rx.thread: take rx_data\n";
         lwt _ = match winadv with
           | None -> return ()
           | Some winadv -> begin
@@ -336,6 +338,7 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     return (pcb, th)
 
   let input_no_pcb t listeners pkt id =
+    printf "[DEBUG] input_no_pcb: port=(%d:%d)\n" id.local_port id.dest_port;
     match verify_checksum id pkt with
     |false -> return (printf "RX.input: checksum error\n%!")
     |true ->
@@ -422,6 +425,7 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
                         Rx.input t pkt newconn
                         >>= fun () ->
                         (* send new connection up to listener *)
+                        printf "[DEBUG] call pushf (%d:%d)\n" (fst newconn).id.local_port (fst newconn).id.dest_port;
                         pushf (fst newconn)
                       end else begin
                         (* No RST because we are trying to connect on this id *)
@@ -459,6 +463,7 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
   (* Blocking read on a PCB *)
   let rec read pcb =
     lwt d = User_buffer.Rx.take_l pcb.urx in 
+    printf "[DEBUG] Pcb.read takes pcb.urx\n";
     return d
 
   (* Maximum allowed write *)

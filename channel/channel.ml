@@ -49,6 +49,7 @@ module Make(Flow:V1_LWT.TCPV4) = struct
   let to_flow { flow } = flow
 
   let ibuf_refill t = 
+    printf "[DEBUG] Channel.ibuf_refill\n";
     match_lwt Flow.read t.flow with
     | `Ok buf ->
         t.ibuf <- Some buf;
@@ -60,7 +61,9 @@ module Make(Flow:V1_LWT.TCPV4) = struct
     match t.ibuf with
     |None -> ibuf_refill t >> get_ibuf t
     |Some buf when Cstruct.len buf = 0 -> ibuf_refill t >> get_ibuf t
-    |Some buf -> return buf
+    |Some buf ->
+        printf "[DEBUG] Channel.get_ibuf: %s\n" (Cstruct.debug buf);
+        return buf
 
   (* Read one character from the input channel *)
   let read_char t =
@@ -118,6 +121,7 @@ module Make(Flow:V1_LWT.TCPV4) = struct
      sequence, or the end of the channel (which counts as a line).
      @return Returns a stream of views that terminates at EOF. *)
   let read_line t =
+    printf "[DEBUG] Channel.read_line\n";
     let rec get acc =
       match_lwt read_until t '\n' with
       |(false, v) ->
@@ -145,6 +149,7 @@ module Make(Flow:V1_LWT.TCPV4) = struct
   (* Queue the active write buffer onto the write queue, resizing the
    * view if necessary to the correct size. *)
   let queue_obuf t =
+    printf "[DEBUG] Channel.queue_obuf\n";
     match t.obuf with
     |None -> ()
     |Some buf when Cstruct.len buf = t.opos -> (* obuf is full *)
@@ -179,6 +184,7 @@ module Make(Flow:V1_LWT.TCPV4) = struct
     t.obufq <- buf :: t.obufq
 
   let rec write_string t s off len =
+    printf "[DEBUG] Channel.write_string: off=%d len=%d\n" off len;
     let buf = get_obuf t in
     let avail = Cstruct.len buf - t.opos in 
     if avail < len then begin
@@ -198,6 +204,7 @@ module Make(Flow:V1_LWT.TCPV4) = struct
     queue_obuf t;
     let l = List.rev t.obufq in
     t.obufq <- [];
+    printf "[DEBUG] Channel.flush: call Flow.writev\n";
     Flow.writev t.flow l
  
   let close t =

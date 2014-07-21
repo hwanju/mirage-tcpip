@@ -44,7 +44,9 @@ module Make(IP:V1_LWT.IPV4)(TM:V1_LWT.TIME)(C:V1.CLOCK)(R:V1.RANDOM) = struct
     Pcb.read t
     >>= function
     | None -> return `Eof
-    | Some t -> return (`Ok t)
+    | Some t ->
+        Printf.printf "[DEBUG] Flow.read takes data\n";
+        return (`Ok t)
 
   let write t view =
     Pcb.write t view

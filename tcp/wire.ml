@@ -52,6 +52,7 @@ module Make (Ipv4:V1_LWT.IPV4) = struct
    also record the sent packet for retranmission purposes *)
 let xmit ~ip ~id ?(rst=false) ?(syn=false) ?(fin=false) ?(psh=false)
   ~rx_ack ~seq ~window ~options datav =
+  printf "[DEBUG] Wire.xmit\n";
   (* Make a TCP/IP header frame *)
   lwt (ethernet_frame, header_len) =
     Ipv4.allocate_frame ~proto:`TCP ~dest_ip:id.dest_ip ip in
@@ -86,12 +87,10 @@ let xmit ~ip ~id ?(rst=false) ?(syn=false) ?(fin=false) ?(psh=false)
   let header = Cstruct.shift ethernet_frame header_len in
   let checksum = checksum ~src:id.local_ip ~dst:id.dest_ip (header::datav) in
   set_tcpv4_checksum tcp_frame checksum;
-  (*
   printf "TCP.xmit checksum %04x %s.%d->%s.%d rst %b syn %b fin %b psh %b seq %lu ack %lu %s datalen %d datafrag %d dataoff %d olen %d\n%!"
     checksum
-    (ipv4_addr_to_string id.local_ip) id.local_port (ipv4_addr_to_string id.dest_ip) id.dest_port
+    (Ipaddr.V4.to_string id.local_ip) id.local_port (Ipaddr.V4.to_string id.dest_ip) id.dest_port
     rst syn fin psh sequence ack_number (Options.prettyprint options) 
     (Cstruct.lenv datav) (List.length datav) data_off options_len;
-  *)
   Ipv4.writev ip ethernet_frame datav
 end

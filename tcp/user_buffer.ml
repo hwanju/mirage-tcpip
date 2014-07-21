@@ -54,6 +54,7 @@ module Rx = struct
     | Some b -> Cstruct.len b
 
   let add_r t s =
+    printf "[DEBUG] User_buffer.Rx.add_r: cur_size=%lu max_size=%lu\n" t.cur_size t.max_size;
     if t.cur_size > t.max_size then
       let th,u = Lwt.task () in
       let node = Lwt_sequence.add_r u t.writers in
@@ -241,6 +242,7 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
 
   (* Chunk up the segments into MSS max for transmission *)
   let transmit_segments ~mss ~txq datav =
+    printf "[DEBUG] User_buffer.Tx.transmit_segments\n";
     let transmit acc = 
       let b = compactbufs (List.rev acc) in
       TXS.output ~flags:Segment.Psh txq b
@@ -267,6 +269,7 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
   let write t datav =
     let l = lenv datav in
     let mss = Int32.of_int (Window.tx_mss t.wnd) in
+    printf "[DEBUG] User_buffer.TX.write: len=%lu mss=%lu\n" l mss;
     match Lwt_sequence.is_empty t.buffer &&
       (l = mss || not (Window.tx_inflight t.wnd)) with
     | false -> 

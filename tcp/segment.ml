@@ -110,6 +110,7 @@ module Rx(Time:V1_LWT.TIME) = struct
      extract any ready segments into the user receive queue,
      and signal any acks to the Tx queue *)
   let input q seg =
+    printf "[DEBUG] RXS.input: %s\n" (seg_to_string seg);
     (* Check that the segment fits into the valid receive 
        window *)
     let force_ack = ref false in
@@ -143,6 +144,7 @@ module Rx(Time:V1_LWT.TIME) = struct
 
       (* If the segment has an ACK, tell the transmit side *)
       let tx_ack =
+        printf "[DEBUG] RXS.input: tx_ack\n";
         if seg.ack then begin
           StateTick.tick q.state (Recv_ack seg.ack_number);
           let win = window ready in
@@ -167,6 +169,7 @@ module Rx(Time:V1_LWT.TIME) = struct
 
       (* Inform the user application of new data *)
       let urx_inform =
+        printf "[DEBUG] RXS.input: urx_inform\n";
         (* TODO: deal with overlapping fragments *)
         let elems_r, winadv = S.fold (fun seg (acc_l, acc_w) ->
           (if Cstruct.len seg.data > 0 then seg.data :: acc_l else acc_l), ((len seg) + acc_w)
@@ -372,6 +375,7 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
     let seg = { data; flags; seq } in
     let seq_len = len seg in
     TX.tx_advance q.wnd seq_len;
+    printf "[DEBUG] TXS.output\n";
     (* Queue up segment just sent for retransmission if needed *)
     let q_rexmit () =
       match seq_len > 0 with
