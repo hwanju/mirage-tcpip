@@ -20,6 +20,7 @@ open Printf
 open State
 open Wire_structs.Tcp_wire
 open Wire
+open Sexplib.Std
 
 cstruct pseudo_header {
   uint32_t src;
@@ -50,6 +51,12 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     urx_close_u: unit Lwt.u;  (* App rx connection close wakener *)
     utx: UTX.t;               (* App tx buffer *)
   }
+
+  type mig_state = {
+    tx_nxt: int32;
+    rx_nxt: int32;
+    tx_mss: int;
+  } with sexp
 
   type connection = pcb * unit Lwt.t
 

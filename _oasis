@@ -12,7 +12,8 @@ Library tcpip
   Path:               lib
   Findlibname:        tcpip
   Modules:            Wire_structs
-  BuildDepends:       io-page,mirage-types,ipaddr,cstruct
+  BuildDepends:       io-page,mirage-types,ipaddr,cstruct, sexplib, sexplib.syntax
+  XMETARequires:      io-page,mirage-types,ipaddr,cstruct, sexplib
 
 Library ethif
   CompiledObject:     best
