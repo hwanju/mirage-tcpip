@@ -111,8 +111,8 @@ let valid t seq =
   let redge = Sequence.(add t.rx_nxt (of_int32 t.rx_wnd)) in
   let ledge = Sequence.(sub t.rx_nxt (of_int32 t.max_rx_wnd)) in 
   let r = Sequence.between seq ledge redge in
-  (* printf "TCP_window: valid check for seq=%s for range %s[%lu] res=%b\n%!"
-    (Sequence.to_string seq) (Sequence.to_string t.rx_nxt) t.rx_wnd r; *)
+  printf "TCP_window: valid check for seq=%s for range %s[%lu] res=%b\n%!"
+    (Sequence.to_string seq) (Sequence.to_string t.rx_nxt) t.rx_wnd r;
   r
 
 (* Advance received packet sequence number *)
