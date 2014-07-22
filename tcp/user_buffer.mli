@@ -15,9 +15,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Sexplib
+
 module Rx : sig
   type t
 
+  val sexp_of_t : t -> Sexp.t
   val create : max_size:int32 -> wnd:Window.t -> t
   val add_r : t -> Cstruct.t option -> unit Lwt.t
   val take_l : t -> Cstruct.t option Lwt.t
@@ -35,6 +38,7 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) : sig
     val output : ?flags:Segment.tx_flags -> ?options:Options.ts -> q -> Cstruct.t list -> unit Lwt.t
   end
 
+  val sexp_of_t : t -> Sexp.t
   val create: max_size:int32 -> wnd:Window.t -> txq:TXS.q -> t
   val available: t -> int32
   val wait_for: t -> int32 -> unit Lwt.t

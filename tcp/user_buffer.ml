@@ -17,6 +17,7 @@
 
 open Lwt
 open Printf
+open Sexplib.Std
 
 (* A bounded queue to receive data segments and let readers block on 
    receiving them. Also supports a monitor that is informed when the
@@ -32,6 +33,17 @@ module Rx = struct
     mutable max_size: int32;
     mutable cur_size: int32;
   }
+
+  type t_snapshot = {
+    s_q: Cstruct.t option list;
+    s_wnd: Window.t;
+    s_max_size: int32;
+    s_cur_size: int32;
+  } with sexp
+
+  let sexp_of_t t =
+    let s_q = Lwt_sequence.fold_r (fun seg acc -> seg::acc) t.q [] in
+    sexp_of_t_snapshot {s_q; s_wnd = t.wnd; s_max_size = t.max_size; s_cur_size = t.cur_size}
   
   let create ~max_size ~wnd =
     let q = Lwt_sequence.create () in
@@ -119,6 +131,17 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
     max_size: int32;
     mutable bufbytes: int32;
   }
+
+  type t_snapshot = {
+    s_buffer: Cstruct.t list;
+    s_wnd: Window.t;
+    s_max_size: int32;
+    s_bufbytes: int32;
+  } with sexp
+
+  let sexp_of_t t =
+    let s_buffer = Lwt_sequence.fold_r (fun seg acc -> seg::acc) t.buffer [] in
+    sexp_of_t_snapshot {s_buffer; s_wnd = t.wnd; s_max_size = t.max_size; s_bufbytes = t.bufbytes}
 
   let create ~max_size ~wnd ~txq = 
     let buffer = Lwt_sequence.create () in
