@@ -16,6 +16,7 @@
 
 open Lwt
 open Printf
+open Sexplib.Std
 
 type action =
   | Passive_open
@@ -41,14 +42,14 @@ type tcpstates =
   | Fin_wait_1 of Sequence.t
   | Fin_wait_2 of int
   | Closing of Sequence.t
-  | Time_wait
+  | Time_wait with sexp
 
-type close_cb = unit -> unit
+type close_cb = unit -> unit with sexp
 
 type t = {
   on_close: close_cb;  
   mutable state: tcpstates;
-}
+} with sexp
 
 exception Bad_transition of (tcpstates * action)
 

@@ -14,8 +14,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Sexplib.Std
 
-type t 
+type t with sexp
 
 val t : rx_wnd_scale:int -> tx_wnd_scale:int -> rx_wnd:int ->
   tx_wnd:int -> rx_isn:Sequence.t -> tx_mss:int option -> tx_isn:Sequence.t -> t

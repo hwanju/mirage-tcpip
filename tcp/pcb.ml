@@ -20,6 +20,7 @@ open Printf
 open State
 open Wire_structs.Tcp_wire
 open Wire
+open Sexplib
 open Sexplib.Std
 
 cstruct pseudo_header {
@@ -52,11 +53,18 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     utx: UTX.t;               (* App tx buffer *)
   }
 
-  type mig_state = {
-    tx_nxt: int32;
-    rx_nxt: int32;
-    tx_mss: int;
-  } with sexp
+  let print_state pcb =
+    let state_sexps = [
+      sexp_of_id pcb.id;
+      Window.sexp_of_t pcb.wnd;
+      State.sexp_of_t pcb.state; 
+      TXS.sexp_of_q pcb.txq;
+      RXS.sexp_of_q pcb.rxq;
+    ] in
+    let state_sexps_str = List.map Sexp.to_string state_sexps in
+    printf "[STATE] BEGIN -----------------\n";
+    List.iter (printf "\t%s\n") state_sexps_str;
+    printf "[STATE] END -------------------\n"
 
   type connection = pcb * unit Lwt.t
 
@@ -167,6 +175,7 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     (* Process an incoming TCP packet that has an active PCB *)
     let input t pkt (pcb,_) =
       printf "[DEBUG] Rx.input: port=(%d:%d)\n" pcb.id.local_port pcb.id.dest_port;
+      print_state pcb;
       match verify_checksum pcb.id pkt with
       | false -> return (printf "RX.input: checksum error\n%!")
       | true ->

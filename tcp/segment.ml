@@ -17,6 +17,7 @@
 open Printf
 open Lwt
 open State
+open Sexplib.Std
 
 let peek_opt_l seq =
   match Lwt_sequence.take_opt_l seq with
@@ -46,7 +47,7 @@ module Rx(Time:V1_LWT.TIME) = struct
     ack: bool;
     ack_number: Sequence.t;
     window: int;
-  }
+  } with sexp
 
   let seg_to_string seg =
     sprintf "TCP: RX seg seq=%s fin=%b syn=%b ack=%b acknum=%s win=%d"
@@ -76,6 +77,16 @@ module Rx(Time:V1_LWT.TIME) = struct
     wnd: Window.t;
     state: State.t;
   }
+
+  type q_snapshot = {
+    s_segs : seg list;
+    s_wnd: Window.t;
+    s_state: State.t;
+  } with sexp
+
+  let sexp_of_q q =
+    (* XXX: ensure that mvar is empty? *)
+    sexp_of_q_snapshot {s_segs = S.elements q.segs; s_wnd = q.wnd; s_state = q.state}
 
   let q ~rx_data ~wnd ~state ~tx_ack =
     let segs = S.empty in
@@ -200,7 +211,7 @@ type tx_flags = (* Either Syn/Fin/Rst allowed, but not combinations *)
    |Syn
    |Fin
    |Rst
-   |Psh
+   |Psh with sexp
 
 module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
 
@@ -215,7 +226,7 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
     data: Cstruct.t list;
     flags: tx_flags;
     seq: Sequence.t;
-  }
+  } with sexp
 
   (* Sequence length of the segment *)
   let len seg =
@@ -233,6 +244,17 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
     rexmit_timer: Tcptimer.t;      (* Retransmission timer for this connection *)
     mutable dup_acks: int;         (* dup ack count for re-xmits *)
   }
+
+  type q_snapshot = {
+    s_segs: seg list;
+    s_wnd: Window.t;
+    s_state: State.t;
+  } with sexp
+
+  let sexp_of_q q =
+    (* XXX: ensure that mvar is empty? *)
+    let s_segs = Lwt_sequence.fold_r (fun seg acc -> seg::acc) q.segs [] in
+    sexp_of_q_snapshot {s_segs; s_wnd = q.wnd; s_state = q.state}
 
   let to_string seg =
     sprintf "[%s%d]" 

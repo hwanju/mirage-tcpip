@@ -17,6 +17,7 @@
 open Lwt
 open Printf
 open Wire_structs.Tcp_wire
+open Sexplib.Std
 
 let get_options buf =
   if get_data_offset buf > 20 then
@@ -45,7 +46,7 @@ type id = {
   dest_ip: Ipaddr.V4.t;         (* Remote IP address *)
   local_port: int;              (* Local TCP port *)
   local_ip: Ipaddr.V4.t;        (* Local IP address *)
-}
+} with sexp
 
 module Make (Ipv4:V1_LWT.IPV4) = struct
 (* Output a general TCP packet, checksum it, and if a reference is provided,

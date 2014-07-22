@@ -14,7 +14,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-type t
+open Sexplib.Std
+
+type t with sexp
 
 (* a < b *)
 val lt : t -> t -> bool

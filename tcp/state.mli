@@ -14,6 +14,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Sexplib.Std
+
 type action =
   | Passive_open
   | Recv_rst
@@ -40,12 +42,12 @@ type tcpstates =
   | Closing of Sequence.t
   | Time_wait
 
-type close_cb = unit -> unit
+type close_cb = unit -> unit with sexp
 
 type t = {
   on_close: close_cb;
   mutable state: tcpstates;
-}
+} with sexp
 
 val state : t -> tcpstates
 val t : on_close:close_cb -> t

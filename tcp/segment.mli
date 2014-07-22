@@ -15,6 +15,7 @@
  *)
 
 open State
+open Sexplib
 
 module Rx (T:V1_LWT.TIME) : sig
     type seg
@@ -25,6 +26,7 @@ module Rx (T:V1_LWT.TIME) : sig
     val q : rx_data:(Cstruct.t list option * int option) Lwt_mvar.t ->
       wnd:Window.t -> state:State.t ->
       tx_ack:(Sequence.t * int) Lwt_mvar.t -> q
+    val sexp_of_q : q -> Sexp.t
     val to_string : q -> string
     val is_empty : q -> bool
     val input : q -> seg -> unit Lwt.t
@@ -44,6 +46,8 @@ module Tx (Time:V1_LWT.TIME)(Clock:V1.CLOCK) : sig
       rx_ack:Sequence.t Lwt_mvar.t ->
       tx_ack:(Sequence.t * int) Lwt_mvar.t ->
       tx_wnd_update:int Lwt_mvar.t -> q * unit Lwt.t
+
+    val sexp_of_q : q -> Sexp.t
 
     val output : ?flags:tx_flags -> ?options:Options.ts -> q -> Cstruct.t list -> unit Lwt.t
    

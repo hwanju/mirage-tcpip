@@ -16,6 +16,7 @@
 
 open Lwt
 open Printf
+open Sexplib.Std
 
 type t = {
   tx_mss: int;
@@ -52,7 +53,7 @@ type t = {
   mutable rttvar: float;
   mutable rto: float;
   mutable backoff_count: int;
-}
+} with sexp
 
 let default_mss = 536
 let max_mss = 1460
