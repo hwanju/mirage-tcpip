@@ -106,3 +106,6 @@ let input t ~listeners =
   (* TODO terminate when signalled by disconnect *)
   let t,u = Lwt.task () in
   t
+
+(* NOT implemented *)
+let get_state t id_sexp_str = None

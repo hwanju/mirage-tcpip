@@ -57,4 +57,6 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
 
   val create: Ipv4.t -> t
   (* val tcpstats: t -> unit *)
+
+  val get_state: t -> string -> string option
 end

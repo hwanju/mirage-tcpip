@@ -64,7 +64,7 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     s_utx: Sexp.t;
   } with sexp
 
-  let print_state pcb =
+  let snapshot_pcb pcb =
     let s_pcb = {
       s_id = sexp_of_id pcb.id;
       s_wnd = Window.sexp_of_t pcb.wnd;
@@ -80,8 +80,9 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     printf "[STATE] BEGIN -----------------\n";
     List.iter (printf "\t%s\n") state_sexps_str;
     printf "[STATE] END -------------------\n";
-    *)
     printf "######## encapsulated pcb #########\n%s\n" (Sexp.to_string (sexp_of_pcb_snapshot s_pcb));
+    *)
+    Sexp.to_string (sexp_of_pcb_snapshot s_pcb)
 
   type connection = pcb * unit Lwt.t
 
@@ -192,7 +193,6 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     (* Process an incoming TCP packet that has an active PCB *)
     let input t pkt (pcb,_) =
       printf "[DEBUG] Rx.input: port=(%d:%d)\n" pcb.id.local_port pcb.id.dest_port;
-      print_state pcb;
       match verify_checksum pcb.id pkt with
       | false -> return (printf "RX.input: checksum error\n%!")
       | true ->
@@ -375,6 +375,12 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     return ()
     (* Hashtbl.add t.channels id conn; *)
     (* TODO: call pushf *)
+
+  let get_state t id_sexp_str =
+    let id = id_of_sexp (Sexp.of_string id_sexp_str) in
+    match (hashtbl_find t.channels id) with
+    | Some (pcb,_) -> Some (snapshot_pcb pcb)
+    | None -> None
 
   let resolve_wnd_scaling options rx_wnd_scaleoffer = 
     let tx_wnd_scale = List.fold_left
