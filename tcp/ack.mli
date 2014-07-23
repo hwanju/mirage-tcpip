@@ -14,10 +14,13 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Sexplib
+
 module type M =
   sig
     type t
     val t : send_ack:Sequence.t Lwt_mvar.t -> last:Sequence.t -> t
+    val sexp_of_t : t -> Sexp.t
 
     val receive : t -> Sequence.t -> unit Lwt.t
     val pushack : t -> Sequence.t -> unit Lwt.t

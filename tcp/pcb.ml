@@ -62,6 +62,7 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
       RXS.sexp_of_q pcb.rxq;
       UTX.sexp_of_t pcb.utx;
       User_buffer.Rx.sexp_of_t pcb.urx;
+      ACK.sexp_of_t pcb.ack;
     ] in
     let state_sexps_str = List.map Sexp.to_string state_sexps in
     printf "[STATE] BEGIN -----------------\n";

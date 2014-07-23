@@ -14,12 +14,14 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-type t 
+open Sexplib.Std
+
+type t with sexp
 
 type tr =
   | Stoptimer
   | Continue of Sequence.t
-  | ContinueSetPeriod of (float * Sequence.t)
+  | ContinueSetPeriod of (float * Sequence.t) with sexp
 
 module Make(T:V1_LWT.TIME) : sig
   val t : period: float -> expire: (Sequence.t -> tr) -> t

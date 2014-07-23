@@ -16,6 +16,8 @@
 
 open Lwt
 open Printf
+open Sexplib.Std
+open Sexplib
 
 (* General signature for all the ack modules *)
 module type M = sig
@@ -23,6 +25,8 @@ module type M = sig
 
   (* ack: put mvar to trigger the transmission of an ack *)
   val t : send_ack:Sequence.t Lwt_mvar.t -> last:Sequence.t -> t 
+
+  val sexp_of_t : t -> Sexp.t
 
   (* called when new data is received *)
   val receive: t -> Sequence.t -> unit Lwt.t
@@ -41,6 +45,8 @@ module Immediate : M = struct
     mutable send_ack: Sequence.t Lwt_mvar.t;
     mutable pushpending: bool;
   }
+
+  let sexp_of_t t = Sexp.of_string "()"
 
   let t ~send_ack ~last = 
     let pushpending = false in
@@ -77,6 +83,23 @@ module Delayed (Time:V1_LWT.TIME) : M = struct
     r: delayed_r;
     timer: Tcptimer.t;
   }
+
+  type delayed_r_snapshot = {
+    s_delayedack: Sequence.t;
+    s_delayed: bool;
+    s_pushpending: bool;
+  } with sexp
+
+  type t_snapshot = {
+    s_r: delayed_r_snapshot;
+    s_timer: Tcptimer.t;
+  } with sexp
+
+  let sexp_of_t t =
+    let s_r = {s_delayedack = t.r.delayedack;
+               s_delayed = t.r.delayed;
+               s_pushpending = t.r.pushpending} in
+    sexp_of_t_snapshot {s_r; s_timer = t.timer}
 
   let transmitacknow r ack_number =
     Lwt_mvar.put r.send_ack ack_number
