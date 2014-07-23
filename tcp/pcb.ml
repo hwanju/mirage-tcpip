@@ -64,26 +64,6 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     s_utx: Sexp.t;
   } with sexp
 
-  let snapshot_pcb pcb =
-    let s_pcb = {
-      s_id = sexp_of_id pcb.id;
-      s_wnd = Window.sexp_of_t pcb.wnd;
-      s_rxq = RXS.sexp_of_q pcb.rxq;
-      s_txq = TXS.sexp_of_q pcb.txq;
-      s_ack = ACK.sexp_of_t pcb.ack;
-      s_state = State.sexp_of_t pcb.state; 
-      s_urx = User_buffer.Rx.sexp_of_t pcb.urx;
-      s_utx = UTX.sexp_of_t pcb.utx;
-    } in
-    (*
-    let state_sexps_str = List.map Sexp.to_string s_pcb in
-    printf "[STATE] BEGIN -----------------\n";
-    List.iter (printf "\t%s\n") state_sexps_str;
-    printf "[STATE] END -------------------\n";
-    printf "######## encapsulated pcb #########\n%s\n" (Sexp.to_string (sexp_of_pcb_snapshot s_pcb));
-    *)
-    Sexp.to_string (sexp_of_pcb_snapshot s_pcb)
-
   type connection = pcb * unit Lwt.t
 
   type connection_result = [ `Ok of connection | `Rst | `Timeout ]
@@ -366,20 +346,43 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     let fnth = fun x -> th_frees := !th_frees + 1 in
     Gc.finalise fnpcb pcb;
     Gc.finalise fnth th;
-    return (id, (pcb, th))
+    (id, (pcb, th))
 
   let restore_connection t s_pcb_sexp =
-    lwt (id, conn) = restore_pcb t s_pcb_sexp in
+    printf "[DEBUG] ======== RESTORE CONNECTION ========\n%s\n" (Sexp.to_string s_pcb_sexp);
+    let (id, conn) = restore_pcb t s_pcb_sexp in
     (* for local test: don't replace *)
-    Hashtbl.replace t.channels id conn;
-    return ()
+    Hashtbl.replace t.channels id conn
     (* Hashtbl.add t.channels id conn; *)
     (* TODO: call pushf *)
+
+  let snapshot_pcb pcb =
+    let s_pcb = {
+      s_id = sexp_of_id pcb.id;
+      s_wnd = Window.sexp_of_t pcb.wnd;
+      s_rxq = RXS.sexp_of_q pcb.rxq;
+      s_txq = TXS.sexp_of_q pcb.txq;
+      s_ack = ACK.sexp_of_t pcb.ack;
+      s_state = State.sexp_of_t pcb.state; 
+      s_urx = User_buffer.Rx.sexp_of_t pcb.urx;
+      s_utx = UTX.sexp_of_t pcb.utx;
+    } in
+    (*
+    let state_sexps_str = List.map Sexp.to_string s_pcb in
+    printf "[STATE] BEGIN -----------------\n";
+    List.iter (printf "\t%s\n") state_sexps_str;
+    printf "[STATE] END -------------------\n";
+    printf "######## encapsulated pcb #########\n%s\n" (Sexp.to_string (sexp_of_pcb_snapshot s_pcb));
+    *)
+    (sexp_of_pcb_snapshot s_pcb)
 
   let get_state t id_sexp_str =
     let id = id_of_sexp (Sexp.of_string id_sexp_str) in
     match (hashtbl_find t.channels id) with
-    | Some (pcb,_) -> Some (snapshot_pcb pcb)
+    | Some (pcb,_) ->
+        let s_pcb_sexp = snapshot_pcb pcb in
+        (*restore_connection t s_pcb_sexp;  (* TEST: local swap! *)*)
+        Some (Sexp.to_string s_pcb_sexp)
     | None -> None
 
   let resolve_wnd_scaling options rx_wnd_scaleoffer = 
