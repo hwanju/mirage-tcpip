@@ -257,4 +257,5 @@ let tx_totalbytes t =
 let rx_totalbytes t =
   Sequence.(to_int (sub t.rx_nxt t.rx_isn))
   
+let tx_isn t = t.tx_isn
 

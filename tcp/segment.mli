@@ -27,6 +27,9 @@ module Rx (T:V1_LWT.TIME) : sig
       wnd:Window.t -> state:State.t ->
       tx_ack:(Sequence.t * int) Lwt_mvar.t -> q
     val sexp_of_q : q -> Sexp.t
+    val q_of_sexp : rx_data:(Cstruct.t list option * int option) Lwt_mvar.t ->
+      wnd:Window.t -> state:State.t ->
+      tx_ack:(Sequence.t * int) Lwt_mvar.t -> Sexp.t -> q
     val to_string : q -> string
     val is_empty : q -> bool
     val input : q -> seg -> unit Lwt.t
@@ -48,6 +51,10 @@ module Tx (Time:V1_LWT.TIME)(Clock:V1.CLOCK) : sig
       tx_wnd_update:int Lwt_mvar.t -> q * unit Lwt.t
 
     val sexp_of_q : q -> Sexp.t
+    val q_of_sexp : xmit:xmit -> wnd:Window.t -> state:State.t ->
+      rx_ack:Sequence.t Lwt_mvar.t ->
+      tx_ack:(Sequence.t * int) Lwt_mvar.t ->
+      tx_wnd_update:int Lwt_mvar.t -> Sexp.t -> q
 
     val output : ?flags:tx_flags -> ?options:Options.ts -> q -> Cstruct.t list -> unit Lwt.t
    

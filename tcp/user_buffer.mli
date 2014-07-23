@@ -21,6 +21,7 @@ module Rx : sig
   type t
 
   val sexp_of_t : t -> Sexp.t
+  val t_of_sexp : Sexp.t -> t
   val create : max_size:int32 -> wnd:Window.t -> t
   val add_r : t -> Cstruct.t option -> unit Lwt.t
   val take_l : t -> Cstruct.t option Lwt.t
@@ -39,6 +40,7 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) : sig
   end
 
   val sexp_of_t : t -> Sexp.t
+  val t_of_sexp : txq:TXS.q -> Sexp.t -> t
   val create: max_size:int32 -> wnd:Window.t -> txq:TXS.q -> t
   val available: t -> int32
   val wait_for: t -> int32 -> unit Lwt.t

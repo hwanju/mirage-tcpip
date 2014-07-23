@@ -69,3 +69,6 @@ val max_rexmits_done : t -> bool
 
 val tx_totalbytes : t -> int
 val rx_totalbytes : t -> int
+
+(* for on_close of State.t during restore *)
+val tx_isn : t -> Sequence.t

@@ -51,6 +51,7 @@ type t = {
 
 val state : t -> tcpstates
 val t : on_close:close_cb -> t
+val update_on_close : on_close:close_cb -> t -> t
 val tcpstates_to_string : tcpstates -> string
 
 module Make(Time : V1_LWT.TIME) : sig

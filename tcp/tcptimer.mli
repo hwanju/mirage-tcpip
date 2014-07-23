@@ -26,5 +26,6 @@ type tr =
 module Make(T:V1_LWT.TIME) : sig
   val t : period: float -> expire: (Sequence.t -> tr) -> t
 
+  val update_expire : expire: (Sequence.t -> tr) -> t -> t
   val start : t -> ?p:float -> Sequence.t -> unit Lwt.t
 end

@@ -80,13 +80,16 @@ module Rx(Time:V1_LWT.TIME) = struct
 
   type q_snapshot = {
     s_segs : seg list;
-    s_wnd: Window.t;
-    s_state: State.t;
   } with sexp
 
   let sexp_of_q q =
     (* XXX: ensure that mvar is empty? *)
-    sexp_of_q_snapshot {s_segs = S.elements q.segs; s_wnd = q.wnd; s_state = q.state}
+    sexp_of_q_snapshot {s_segs = S.elements q.segs}
+
+  let q_of_sexp ~rx_data ~wnd ~state ~tx_ack q_sexp =
+    let s_q = q_snapshot_of_sexp q_sexp in
+    let segs = List.fold_left (fun acc seg -> S.add seg acc) S.empty s_q.s_segs in
+    { segs; rx_data; tx_ack; wnd; state }
 
   let q ~rx_data ~wnd ~state ~tx_ack =
     let segs = S.empty in
@@ -247,14 +250,21 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
 
   type q_snapshot = {
     s_segs: seg list;
-    s_wnd: Window.t;
-    s_state: State.t;
+    s_rexmit_timer: Tcptimer.t;
+    s_dup_acks: int;
   } with sexp
 
   let sexp_of_q q =
     (* XXX: ensure that mvar is empty? *)
     let s_segs = Lwt_sequence.fold_r (fun seg acc -> seg::acc) q.segs [] in
-    sexp_of_q_snapshot {s_segs; s_wnd = q.wnd; s_state = q.state}
+    sexp_of_q_snapshot {s_segs; s_rexmit_timer = q.rexmit_timer; s_dup_acks = q.dup_acks}
+
+  let q_of_sexp ~xmit ~wnd ~state ~rx_ack ~tx_ack ~tx_wnd_update q_sexp =
+    let s_q = q_snapshot_of_sexp q_sexp in
+    let segs = List.fold_left (fun acc seg -> ignore(Lwt_sequence.add_r seg acc); acc)
+                              (Lwt_sequence.create ()) s_q.s_segs in
+    { segs; xmit; rx_ack; wnd; state; tx_wnd_update;
+      rexmit_timer = s_q.s_rexmit_timer; dup_acks = s_q.s_dup_acks }
 
   let to_string seg =
     sprintf "[%s%d]" 

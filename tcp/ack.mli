@@ -21,6 +21,7 @@ module type M =
     type t
     val t : send_ack:Sequence.t Lwt_mvar.t -> last:Sequence.t -> t
     val sexp_of_t : t -> Sexp.t
+    val t_of_sexp: send_ack:Sequence.t Lwt_mvar.t -> Sexp.t -> t
 
     val receive : t -> Sequence.t -> unit Lwt.t
     val pushack : t -> Sequence.t -> unit Lwt.t

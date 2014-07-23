@@ -58,6 +58,9 @@ let t ~on_close =
 
 let state t = t.state
 
+let update_on_close ~on_close t =
+  { t with on_close }
+
 let action_to_string = function
   | Passive_open -> "Passive_open"
   | Recv_rst -> "Recv_rst"

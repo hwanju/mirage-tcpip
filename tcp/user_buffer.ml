@@ -44,6 +44,16 @@ module Rx = struct
   let sexp_of_t t =
     let s_q = Lwt_sequence.fold_r (fun seg acc -> seg::acc) t.q [] in
     sexp_of_t_snapshot {s_q; s_wnd = t.wnd; s_max_size = t.max_size; s_cur_size = t.cur_size}
+
+  let t_of_sexp t_sexp =
+    let s_t = t_snapshot_of_sexp t_sexp in
+    let q = List.fold_left (fun acc seg -> ignore(Lwt_sequence.add_r seg acc); acc)
+                            (Lwt_sequence.create ()) s_t.s_q in
+    let writers = Lwt_sequence.create () in
+    let readers = Lwt_sequence.create () in
+    let watcher = None in
+    { q; wnd = s_t.s_wnd; writers; readers; max_size = s_t.s_max_size;
+      cur_size = s_t.s_cur_size; watcher }
   
   let create ~max_size ~wnd =
     let q = Lwt_sequence.create () in
@@ -133,8 +143,8 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
   }
 
   type t_snapshot = {
-    s_buffer: Cstruct.t list;
     s_wnd: Window.t;
+    s_buffer: Cstruct.t list;
     s_max_size: int32;
     s_bufbytes: int32;
   } with sexp
@@ -142,6 +152,13 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
   let sexp_of_t t =
     let s_buffer = Lwt_sequence.fold_r (fun seg acc -> seg::acc) t.buffer [] in
     sexp_of_t_snapshot {s_buffer; s_wnd = t.wnd; s_max_size = t.max_size; s_bufbytes = t.bufbytes}
+
+  let t_of_sexp ~txq t_sexp =
+    let s_t = t_snapshot_of_sexp t_sexp in
+    let buffer = List.fold_left (fun acc seg -> ignore(Lwt_sequence.add_r seg acc); acc)
+                            (Lwt_sequence.create ()) s_t.s_buffer in
+    let writers = Lwt_sequence.create () in
+    { wnd = s_t.s_wnd; writers; txq; buffer; max_size = s_t.s_max_size; bufbytes = s_t.s_bufbytes }
 
   let create ~max_size ~wnd ~txq = 
     let buffer = Lwt_sequence.create () in

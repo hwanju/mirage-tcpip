@@ -53,21 +53,35 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     utx: UTX.t;               (* App tx buffer *)
   }
 
+  type pcb_snapshot = {
+    s_id: Sexp.t;
+    s_wnd: Sexp.t;
+    s_rxq: Sexp.t;
+    s_txq: Sexp.t;
+    s_ack: Sexp.t;
+    s_state: Sexp.t;
+    s_urx: Sexp.t;
+    s_utx: Sexp.t;
+  } with sexp
+
   let print_state pcb =
-    let state_sexps = [
-      sexp_of_id pcb.id;
-      Window.sexp_of_t pcb.wnd;
-      State.sexp_of_t pcb.state; 
-      TXS.sexp_of_q pcb.txq;
-      RXS.sexp_of_q pcb.rxq;
-      UTX.sexp_of_t pcb.utx;
-      User_buffer.Rx.sexp_of_t pcb.urx;
-      ACK.sexp_of_t pcb.ack;
-    ] in
-    let state_sexps_str = List.map Sexp.to_string state_sexps in
+    let s_pcb = {
+      s_id = sexp_of_id pcb.id;
+      s_wnd = Window.sexp_of_t pcb.wnd;
+      s_rxq = RXS.sexp_of_q pcb.rxq;
+      s_txq = TXS.sexp_of_q pcb.txq;
+      s_ack = ACK.sexp_of_t pcb.ack;
+      s_state = State.sexp_of_t pcb.state; 
+      s_urx = User_buffer.Rx.sexp_of_t pcb.urx;
+      s_utx = UTX.sexp_of_t pcb.utx;
+    } in
+    (*
+    let state_sexps_str = List.map Sexp.to_string s_pcb in
     printf "[STATE] BEGIN -----------------\n";
     List.iter (printf "\t%s\n") state_sexps_str;
-    printf "[STATE] END -------------------\n"
+    printf "[STATE] END -------------------\n";
+    *)
+    printf "######## encapsulated pcb #########\n%s\n" (Sexp.to_string (sexp_of_pcb_snapshot s_pcb));
 
   type connection = pcb * unit Lwt.t
 
@@ -321,6 +335,46 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     Gc.finalise fnpcb pcb;
     Gc.finalise fnth th;
     return (pcb, th)
+
+  let restore_pcb t s_pcb_sexp =
+    (* some codes can be shared with new_pcb later on: currently no touch on * new_pcb *)
+    let s_pcb = pcb_snapshot_of_sexp s_pcb_sexp in
+    let id = id_of_sexp s_pcb.s_id in
+    let wnd = Window.t_of_sexp s_pcb.s_wnd in
+    let rx_ack = Lwt_mvar.create_empty () in
+    let tx_ack = Lwt_mvar.create_empty () in
+    let rx_data = Lwt_mvar.create_empty () in
+    let send_ack = Lwt_mvar.create_empty () in
+    let tx_wnd_update = Lwt_mvar.create_empty () in
+    let on_close () = clearpcb t id (Window.tx_isn wnd) in
+    let state = update_on_close (State.t_of_sexp s_pcb.s_state) ~on_close in
+    let txq = TXS.q_of_sexp ~xmit:(Tx.xmit_pcb t.ip id) ~wnd ~state ~rx_ack ~tx_ack ~tx_wnd_update s_pcb.s_txq in
+    let rxq = RXS.q_of_sexp ~rx_data ~wnd ~state ~tx_ack s_pcb.s_rxq in
+    let ack = ACK.t_of_sexp ~send_ack s_pcb.s_ack in
+    let urx = User_buffer.Rx.t_of_sexp s_pcb.s_urx in
+    let utx = UTX.t_of_sexp ~txq s_pcb.s_utx in
+    let urx_close_t, urx_close_u = Lwt.task () in
+    let pcb = { state; rxq; txq; wnd; id; ack; urx; urx_close_t; urx_close_u; utx } in
+    let th =
+      (Tx.thread t pcb ~send_ack ~rx_ack) <?>
+      (Rx.thread pcb ~rx_data) <?>
+      (Wnd.thread ~utx ~urx ~wnd ~tx_wnd_update)
+    in
+    pcb_allocs := !pcb_allocs + 1;
+    th_allocs := !th_allocs + 1;
+    let fnpcb = fun x -> pcb_frees := !pcb_frees + 1 in
+    let fnth = fun x -> th_frees := !th_frees + 1 in
+    Gc.finalise fnpcb pcb;
+    Gc.finalise fnth th;
+    return (id, (pcb, th))
+
+  let restore_connection t s_pcb_sexp =
+    lwt (id, conn) = restore_pcb t s_pcb_sexp in
+    (* for local test: don't replace *)
+    Hashtbl.replace t.channels id conn;
+    return ()
+    (* Hashtbl.add t.channels id conn; *)
+    (* TODO: call pushf *)
 
   let resolve_wnd_scaling options rx_wnd_scaleoffer = 
     let tx_wnd_scale = List.fold_left

@@ -34,6 +34,9 @@ module Make(Time:V1_LWT.TIME) = struct
     let running = false in
     {period; expire; running}
 
+  let update_expire ~expire t =
+    { t with expire }
+
   let rec timerloop t s =
     Time.sleep t.period >>
     match t.expire s with

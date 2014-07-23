@@ -27,6 +27,7 @@ module type M = sig
   val t : send_ack:Sequence.t Lwt_mvar.t -> last:Sequence.t -> t 
 
   val sexp_of_t : t -> Sexp.t
+  val t_of_sexp: send_ack:Sequence.t Lwt_mvar.t -> Sexp.t -> t
 
   (* called when new data is received *)
   val receive: t -> Sequence.t -> unit Lwt.t
@@ -46,11 +47,15 @@ module Immediate : M = struct
     mutable pushpending: bool;
   }
 
-  let sexp_of_t t = Sexp.of_string "()"
-
   let t ~send_ack ~last = 
     let pushpending = false in
     {send_ack; pushpending}
+
+  (* XXX: placeholder - no implementation *)
+  let sexp_of_t t = Sexp.of_string "()"
+  let t_of_sexp ~send_ack t_sexp : t =
+    let last = Sequence.of_int 0 (* bad *) in
+    t ~send_ack ~last
 
   let pushack t ack_number =
     t.pushpending <- true;
@@ -83,23 +88,6 @@ module Delayed (Time:V1_LWT.TIME) : M = struct
     r: delayed_r;
     timer: Tcptimer.t;
   }
-
-  type delayed_r_snapshot = {
-    s_delayedack: Sequence.t;
-    s_delayed: bool;
-    s_pushpending: bool;
-  } with sexp
-
-  type t_snapshot = {
-    s_r: delayed_r_snapshot;
-    s_timer: Tcptimer.t;
-  } with sexp
-
-  let sexp_of_t t =
-    let s_r = {s_delayedack = t.r.delayedack;
-               s_delayed = t.r.delayed;
-               s_pushpending = t.r.pushpending} in
-    sexp_of_t_snapshot {s_r; s_timer = t.timer}
 
   let transmitacknow r ack_number =
     Lwt_mvar.put r.send_ack ack_number
@@ -136,6 +124,29 @@ module Delayed (Time:V1_LWT.TIME) : M = struct
     let timer = TT.t ~period ~expire in
     {r; timer}
 
+  type delayed_r_snapshot = {
+    s_delayedack: Sequence.t;
+    s_delayed: bool;
+    s_pushpending: bool;
+  } with sexp
+
+  type t_snapshot = {
+    s_r: delayed_r_snapshot;
+    s_timer: Tcptimer.t;
+  } with sexp
+
+  let sexp_of_t t =
+    let s_r = {s_delayedack = t.r.delayedack;
+               s_delayed = t.r.delayed;
+               s_pushpending = t.r.pushpending} in
+    sexp_of_t_snapshot {s_r; s_timer = t.timer}
+
+  let t_of_sexp ~send_ack t_sexp =
+    let s_t = t_snapshot_of_sexp t_sexp in
+    let r = {send_ack; delayedack = s_t.s_r.s_delayedack; delayed =
+      s_t.s_r.s_delayed; pushpending = s_t.s_r.s_pushpending} in
+    let expire = ontimer r in
+    { r; timer = TT.update_expire ~expire s_t.s_timer }
 
   (* Advance the received ACK count *)
   let receive t ack_number = 
