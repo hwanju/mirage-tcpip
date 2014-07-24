@@ -250,21 +250,9 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
 
   type q_snapshot = {
     s_segs: seg list;
-    s_rexmit_timer: Tcptimer.t;
     s_dup_acks: int;
+    (* TODO-mig: tcptimer (rexmit_timer) migration *)
   } with sexp
-
-  let sexp_of_q q =
-    (* XXX: ensure that mvar is empty? *)
-    let s_segs = Lwt_sequence.fold_r (fun seg acc -> seg::acc) q.segs [] in
-    sexp_of_q_snapshot {s_segs; s_rexmit_timer = q.rexmit_timer; s_dup_acks = q.dup_acks}
-
-  let q_of_sexp ~xmit ~wnd ~state ~rx_ack ~tx_ack ~tx_wnd_update q_sexp =
-    let s_q = q_snapshot_of_sexp q_sexp in
-    let segs = List.fold_left (fun acc seg -> ignore(Lwt_sequence.add_r seg acc); acc)
-                              (Lwt_sequence.create ()) s_q.s_segs in
-    { segs; xmit; rx_ack; wnd; state; tx_wnd_update;
-      rexmit_timer = s_q.s_rexmit_timer; dup_acks = s_q.s_dup_acks }
 
   let to_string seg =
     sprintf "[%s%d]" 
@@ -391,6 +379,21 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
     let q = { xmit; wnd; state; rx_ack; segs; tx_wnd_update; rexmit_timer; dup_acks } in
     let t = rto_t q tx_ack in
     q, t
+
+  let sexp_of_q q =
+    (* XXX: ensure that mvar is empty? *)
+    let s_segs = Lwt_sequence.fold_r (fun seg acc -> seg::acc) q.segs [] in
+    sexp_of_q_snapshot {s_segs; s_dup_acks = q.dup_acks}
+
+  let q_of_sexp ~xmit ~wnd ~state ~rx_ack ~tx_ack ~tx_wnd_update q_sexp =
+    let s_q = q_snapshot_of_sexp q_sexp in
+    let segs = List.fold_left (fun acc seg -> ignore(Lwt_sequence.add_r seg acc); acc)
+                              (Lwt_sequence.create ()) s_q.s_segs in
+    let expire = ontimer xmit state segs wnd in
+    let period = Window.rto wnd in
+    let rexmit_timer = TT.t ~period ~expire in
+    (* TODO-mig: tcptimer (rexmit_timer) restore *)
+    { segs; xmit; rx_ack; wnd; state; tx_wnd_update; rexmit_timer; dup_acks = s_q.s_dup_acks }
 
   (* Queue a segment for transmission. May block if:
        - There is no transmit window available.

@@ -317,6 +317,7 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     return (pcb, th)
 
   let restore_pcb t s_pcb_sexp =
+    printf "[DEBUG] ======== RESTORE CONNECTION ========\n%s\n" (Sexp.to_string s_pcb_sexp);
     (* some codes can be shared with new_pcb later on: currently no touch on * new_pcb *)
     let s_pcb = pcb_snapshot_of_sexp s_pcb_sexp in
     let id = id_of_sexp s_pcb.s_id in
@@ -327,7 +328,7 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     let send_ack = Lwt_mvar.create_empty () in
     let tx_wnd_update = Lwt_mvar.create_empty () in
     let on_close () = clearpcb t id (Window.tx_isn wnd) in
-    let state = update_on_close (State.t_of_sexp s_pcb.s_state) ~on_close in
+    let state = State.t_of_sexp ~on_close s_pcb.s_state in
     let txq = TXS.q_of_sexp ~xmit:(Tx.xmit_pcb t.ip id) ~wnd ~state ~rx_ack ~tx_ack ~tx_wnd_update s_pcb.s_txq in
     let rxq = RXS.q_of_sexp ~rx_data ~wnd ~state ~tx_ack s_pcb.s_rxq in
     let ack = ACK.t_of_sexp ~send_ack s_pcb.s_ack in
@@ -349,8 +350,8 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     (id, (pcb, th))
 
   let restore_connection t s_pcb_sexp =
-    printf "[DEBUG] ======== RESTORE CONNECTION ========\n%s\n" (Sexp.to_string s_pcb_sexp);
     let (id, conn) = restore_pcb t s_pcb_sexp in
+    (* ignore () *)
     (* for local test: don't replace *)
     Hashtbl.replace t.channels id conn
     (* Hashtbl.add t.channels id conn; *)
@@ -381,8 +382,9 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     match (hashtbl_find t.channels id) with
     | Some (pcb,_) ->
         let s_pcb_sexp = snapshot_pcb pcb in
-        (*restore_connection t s_pcb_sexp;  (* TEST: local swap! *)*)
-        Some (Sexp.to_string s_pcb_sexp)
+        (* restore_connection t s_pcb_sexp;  (* TEST: local swap! *) *)
+        let s_pcb_sexp_str = (Sexp.to_string s_pcb_sexp) in
+        Some s_pcb_sexp_str
     | None -> None
 
   let resolve_wnd_scaling options rx_wnd_scaleoffer = 

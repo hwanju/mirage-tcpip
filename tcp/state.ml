@@ -49,7 +49,7 @@ type close_cb = unit -> unit with sexp
 type t = {
   on_close: close_cb;  
   mutable state: tcpstates;
-} with sexp
+}
 
 exception Bad_transition of (tcpstates * action)
 
@@ -58,8 +58,9 @@ let t ~on_close =
 
 let state t = t.state
 
-let update_on_close ~on_close t =
-  { t with on_close }
+let sexp_of_t t = sexp_of_tcpstates (state t)
+let t_of_sexp ~on_close t_sexp =
+  { on_close; state = (tcpstates_of_sexp t_sexp) }
 
 let action_to_string = function
   | Passive_open -> "Passive_open"

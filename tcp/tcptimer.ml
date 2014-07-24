@@ -16,26 +16,22 @@
 
 open Lwt
 open Printf
-open Sexplib.Std
 
 type tr =
   | Stoptimer
   | Continue of Sequence.t
-  | ContinueSetPeriod of (float * Sequence.t) with sexp
+  | ContinueSetPeriod of (float * Sequence.t)
 
 type t = {
   expire: (Sequence.t -> tr);
   mutable period: float;
   mutable running: bool;
-} with sexp
+}
 
 module Make(Time:V1_LWT.TIME) = struct
   let t ~period ~expire =
     let running = false in
     {period; expire; running}
-
-  let update_expire ~expire t =
-    { t with expire }
 
   let rec timerloop t s =
     Time.sleep t.period >>

@@ -14,6 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Sexplib
 open Sexplib.Std
 
 type action =
@@ -47,11 +48,12 @@ type close_cb = unit -> unit with sexp
 type t = {
   on_close: close_cb;
   mutable state: tcpstates;
-} with sexp
+}
 
 val state : t -> tcpstates
 val t : on_close:close_cb -> t
-val update_on_close : on_close:close_cb -> t -> t
+val sexp_of_t : t -> Sexp.t
+val t_of_sexp : on_close:close_cb -> Sexp.t -> t
 val tcpstates_to_string : tcpstates -> string
 
 module Make(Time : V1_LWT.TIME) : sig

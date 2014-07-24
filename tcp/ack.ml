@@ -132,21 +132,24 @@ module Delayed (Time:V1_LWT.TIME) : M = struct
 
   type t_snapshot = {
     s_r: delayed_r_snapshot;
-    s_timer: Tcptimer.t;
+    (* TODO-mig: tcptimer migration *)
   } with sexp
 
   let sexp_of_t t =
     let s_r = {s_delayedack = t.r.delayedack;
                s_delayed = t.r.delayed;
                s_pushpending = t.r.pushpending} in
-    sexp_of_t_snapshot {s_r; s_timer = t.timer}
+    sexp_of_t_snapshot {s_r}
 
   let t_of_sexp ~send_ack t_sexp =
     let s_t = t_snapshot_of_sexp t_sexp in
     let r = {send_ack; delayedack = s_t.s_r.s_delayedack; delayed =
       s_t.s_r.s_delayed; pushpending = s_t.s_r.s_pushpending} in
     let expire = ontimer r in
-    { r; timer = TT.update_expire ~expire s_t.s_timer }
+    let period = 0.1 in
+    let timer = TT.t ~expire ~period in
+    (* TODO-mig: tcptimer restore *)
+    { r; timer }
 
   (* Advance the received ACK count *)
   let receive t ack_number = 
