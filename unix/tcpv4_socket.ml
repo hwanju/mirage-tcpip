@@ -108,4 +108,5 @@ let input t ~listeners =
   t
 
 (* NOT implemented *)
-let get_state t id_sexp_str = None
+let get_state t sexp = None
+let set_state t ~listeners sexp = None

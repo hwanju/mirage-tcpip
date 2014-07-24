@@ -149,4 +149,8 @@ module Make(Console:V1_LWT.CONSOLE) = struct
 
   let disconnect t =
     return ()
+
+(* NOT implemented *)
+  let get_state t sexp = None
+  let set_state t sexp = None
 end

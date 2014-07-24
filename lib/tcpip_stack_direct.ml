@@ -165,4 +165,8 @@ module Make
   let disconnect t =
     (* TODO: kill the listening thread *)
     Console.log_s t.c "Manager: disconnect"
+
+  let get_state t sexp = Tcpv4.get_state t.tcpv4 sexp
+  let set_state t sexp = Tcpv4.set_state t.tcpv4 ~listeners:(tcpv4_listeners t) sexp
+    
 end

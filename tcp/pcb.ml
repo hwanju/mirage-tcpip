@@ -349,13 +349,14 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     Gc.finalise fnth th;
     (id, (pcb, th))
 
-  let restore_connection t s_pcb_sexp =
+  let restore_connection t ~listeners s_pcb_sexp =
     let (id, conn) = restore_pcb t s_pcb_sexp in
-    (* ignore () *)
-    (* for local test: don't replace *)
-    Hashtbl.replace t.channels id conn
-    (* Hashtbl.add t.channels id conn; *)
-    (* TODO: call pushf *)
+    match listeners id.local_port with
+    | Some pushf ->
+      Hashtbl.replace t.channels id conn;  (* FIXME: for local test, will be 'add' *)
+      ignore_result (pushf (fst conn));
+      Some "State successfully set!"
+    | None -> None
 
   let snapshot_pcb pcb =
     let s_pcb = {
@@ -382,10 +383,12 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     match (hashtbl_find t.channels id) with
     | Some (pcb,_) ->
         let s_pcb_sexp = snapshot_pcb pcb in
-        (* restore_connection t s_pcb_sexp;  (* TEST: local swap! *) *)
-        let s_pcb_sexp_str = (Sexp.to_string s_pcb_sexp) in
-        Some s_pcb_sexp_str
+        Some (Sexp.to_string s_pcb_sexp)
     | None -> None
+
+  let set_state t ~listeners s_pcb_sexp_str =
+    let s_pcb_sexp = Sexp.of_string s_pcb_sexp_str in
+    restore_connection t ~listeners s_pcb_sexp
 
   let resolve_wnd_scaling options rx_wnd_scaleoffer = 
     let tx_wnd_scale = List.fold_left
