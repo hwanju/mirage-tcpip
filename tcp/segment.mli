@@ -54,7 +54,7 @@ module Tx (Time:V1_LWT.TIME)(Clock:V1.CLOCK) : sig
     val q_of_sexp : xmit:xmit -> wnd:Window.t -> state:State.t ->
       rx_ack:Sequence.t Lwt_mvar.t ->
       tx_ack:(Sequence.t * int) Lwt_mvar.t ->
-      tx_wnd_update:int Lwt_mvar.t -> Sexp.t -> q
+      tx_wnd_update:int Lwt_mvar.t -> Sexp.t -> q * unit Lwt.t
 
     val output : ?flags:tx_flags -> ?options:Options.ts -> q -> Cstruct.t list -> unit Lwt.t
    

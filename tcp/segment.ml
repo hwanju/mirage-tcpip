@@ -393,7 +393,9 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
     let period = Window.rto wnd in
     let rexmit_timer = TT.t ~period ~expire in
     (* TODO-mig: tcptimer (rexmit_timer) restore *)
-    { segs; xmit; rx_ack; wnd; state; tx_wnd_update; rexmit_timer; dup_acks = s_q.s_dup_acks }
+    let q = { segs; xmit; rx_ack; wnd; state; tx_wnd_update; rexmit_timer; dup_acks = s_q.s_dup_acks } in
+    let t = rto_t q tx_ack in
+    q, t
 
   (* Queue a segment for transmission. May block if:
        - There is no transmit window available.
