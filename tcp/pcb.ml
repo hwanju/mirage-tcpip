@@ -333,7 +333,7 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     let rxq = RXS.q_of_sexp ~rx_data ~wnd ~state ~tx_ack s_pcb.s_rxq in
     let ack = ACK.t_of_sexp ~send_ack s_pcb.s_ack in
     let urx = User_buffer.Rx.t_of_sexp s_pcb.s_urx in
-    let utx = UTX.t_of_sexp ~txq s_pcb.s_utx in
+    let utx = UTX.t_of_sexp ~wnd ~txq s_pcb.s_utx in
     let urx_close_t, urx_close_u = Lwt.task () in
     let pcb = { state; rxq; txq; wnd; id; ack; urx; urx_close_t; urx_close_u; utx } in
     let th =
