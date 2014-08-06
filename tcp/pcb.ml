@@ -390,6 +390,8 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     let s_pcb_sexp = Sexp.of_string s_pcb_sexp_str in
     restore_connection t ~listeners s_pcb_sexp
 
+  let id t = Sexp.to_string (sexp_of_id t.id)
+
   let resolve_wnd_scaling options rx_wnd_scaleoffer = 
     let tx_wnd_scale = List.fold_left
         (fun a -> function Options.Window_size_shift m -> Some m |_ -> a) None options in

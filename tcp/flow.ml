@@ -89,4 +89,6 @@ module Make(IP:V1_LWT.IPV4)(TM:V1_LWT.TIME)(C:V1.CLOCK)(R:V1.RANDOM) = struct
 
   let set_state t ~listeners pcb_sexp_str =
     Pcb.set_state t ~listeners pcb_sexp_str
+
+  let string_of_id t = Pcb.id t
 end

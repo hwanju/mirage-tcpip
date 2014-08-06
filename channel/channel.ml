@@ -18,6 +18,8 @@
 
 open Lwt
 open Printf
+open Sexplib
+open Sexplib.Std
 
 module Make(Flow:V1_LWT.TCPV4) = struct
 
@@ -32,9 +34,18 @@ module Make(Flow:V1_LWT.TCPV4) = struct
     mutable obufq: Cstruct.t list;  (* Queue of completed writebuf *)
     mutable obuf: Cstruct.t option; (* Active write buffer *)
     mutable opos: int;                 (* Position in active write buffer *)
+    mutable request: string option; (* in-flight request *)
     abort_t: unit Lwt.t;
     abort_u: unit Lwt.u;
   }
+
+  type t_snapshot = {
+    s_ibuf: Cstruct.t option;
+    s_obufq: Cstruct.t list;
+    s_obuf: Cstruct.t option;
+    s_opos: int;
+    s_request: string option;
+  } with sexp
 
   exception Closed
 
@@ -44,7 +55,7 @@ module Make(Flow:V1_LWT.TCPV4) = struct
     let obuf = None in
     let opos = 0 in
     let abort_t, abort_u = Lwt.task () in
-    { ibuf; obuf; flow; obufq; opos; abort_t; abort_u }
+    { ibuf; obuf; flow; obufq; opos; abort_t; abort_u; request = None }
 
   let to_flow { flow } = flow
 
@@ -212,4 +223,23 @@ module Make(Flow:V1_LWT.TCPV4) = struct
     >>= fun () ->
     Flow.close t.flow
 
+  let get_request t = t.request
+
+  let set_request t req = t.request <- req
+
+  let get_state ic oc =
+    let s_ibuf = match ic.ibuf with
+    | None -> None
+    | Some buf when Cstruct.len buf = 0 -> None
+    | Some buf -> Some buf in
+    let s_t = {s_ibuf; s_obufq = oc.obufq; s_obuf = oc.obuf; s_opos = oc.opos; s_request = ic.request} in
+    Sexp.to_string (sexp_of_t_snapshot s_t)
+
+  let set_state ic oc state =
+    let s_t = t_snapshot_of_sexp (Sexp.of_string state) in
+    ic.ibuf <- s_t.s_ibuf;
+    oc.obufq <- s_t.s_obufq;
+    oc.obuf <- s_t.s_obuf;
+    oc.opos <- s_t.s_opos;
+    ic.request <- s_t.s_request;
 end

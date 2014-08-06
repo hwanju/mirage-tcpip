@@ -110,3 +110,4 @@ let input t ~listeners =
 (* NOT implemented *)
 let get_state t sexp = None
 let set_state t ~listeners sexp = None
+let string_of_id t = ""

@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: d77312f7c5a115173e4c7483237e2240)
+# DO NOT EDIT (digest: 4d38cb20bd02fdf8ac8ffa4cca26e4e0)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -54,6 +54,8 @@
 <channel/*.ml{,i}>: pkg_lwt
 <channel/*.ml{,i}>: pkg_lwt.syntax
 <channel/*.ml{,i}>: pkg_mirage-types
+<channel/*.ml{,i}>: pkg_sexplib
+<channel/*.ml{,i}>: pkg_sexplib.syntax
 # Library dhcpv4
 "dhcp/dhcpv4.cmxs": use_dhcpv4
 <dhcp/*.ml{,i}>: pkg_cstruct
