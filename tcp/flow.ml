@@ -35,6 +35,8 @@ module Make(IP:V1_LWT.IPV4)(TM:V1_LWT.TIME)(C:V1.CLOCK)(R:V1.RANDOM) = struct
    | `Refused
   ]
 
+  exception Write_suspended of int
+
   let id t = Pcb.ip t
 
   let get_dest t = Pcb.get_dest t
@@ -52,7 +54,8 @@ module Make(IP:V1_LWT.IPV4)(TM:V1_LWT.TIME)(C:V1.CLOCK)(R:V1.RANDOM) = struct
     Pcb.write t view
 
   let writev t views =
-    Pcb.writev t views
+    try_lwt Pcb.writev t views
+    with Pcb.Write_suspended write_off -> Lwt.fail (Write_suspended write_off)
 
   let rec write_nodelay t view =
     Pcb.write_nodelay t view

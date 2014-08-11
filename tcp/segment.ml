@@ -167,6 +167,7 @@ module Rx(Time:V1_LWT.TIME) = struct
           let win_has_changed = (Window.ack_win q.wnd) <> win in
           if ((data_in_flight && (Window.ack_serviced q.wnd || not seq_has_changed)) ||
               (not data_in_flight && win_has_changed)) then begin
+            printf "[DEBUG] RXS.input: \tput tx_ack win=%d\n" win;
             Lwt_mvar.put q.tx_ack (seg.ack_number, win) >>
             (Window.set_ack_serviced q.wnd false;
              Window.set_ack_seq q.wnd seg.ack_number;
@@ -343,8 +344,8 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
 		 Window.alert_fast_rexmit q.wnd seq;
 		 (* retransmit the bottom of the unacked list of packets *)
 		 let rexmit_seg = peek_l q.segs in
-		 (* printf "TCP fast retransmission seq = %d, dupack = %d\n%!"
-                    (Sequence.to_int rexmit_seg.seq) (Sequence.to_int seq); *)
+		 printf "TCP fast retransmission seq = %d, dupack = %d\n%!"
+                   (Sequence.to_int rexmit_seg.seq) (Sequence.to_int seq);
 		 let {wnd} = q in
 		 let flags=rexmit_seg.flags in
 		 let options=[] in (* TODO: put the right options *)
@@ -354,6 +355,7 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
 	| false ->
             q.dup_acks <- 0
       in
+      printf "[DEBUG] TXS.rto_t: waiting for taking tx_ack\n";
       lwt (seq, win) = Lwt_mvar.take tx_ack in
       Window.set_ack_serviced q.wnd true;
       let seq = Window.ack_seq q.wnd in
@@ -364,6 +366,7 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
                            (not (Lwt_sequence.is_empty q.segs)))
       in
       serviceack (dupacktest ()) ack_len seq win;
+      printf "[DEBUG] TXS.rto_t: after taking tx_ack, put tx_wnd_update win=%d\n" win;
       (* Inform the window thread of updates to the transmit window *)
       Lwt_mvar.put q.tx_wnd_update win >>
       tx_ack_t ()

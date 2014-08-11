@@ -61,4 +61,5 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
   val get_state: t -> string -> string option
   val set_state: t -> listeners:(int -> (pcb -> unit Lwt.t) option) -> string -> string option
   val id: pcb -> string
+  exception Write_suspended of int
 end

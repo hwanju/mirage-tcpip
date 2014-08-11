@@ -51,6 +51,7 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     urx_close_t: unit Lwt.t;  (* App rx close thread *)
     urx_close_u: unit Lwt.u;  (* App rx connection close wakener *)
     utx: UTX.t;               (* App tx buffer *)
+    mutable cur_write_off: int;
   }
 
   type pcb_snapshot = {
@@ -196,10 +197,11 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
       (* Thread to monitor application receive and pass it up *)
       let rec rx_application_t () =
         lwt data, winadv = Lwt_mvar.take rx_data in
-        printf "[DEBUG] Rx.thread: take rx_data\n";
+        printf "[DEBUG] Rx.thread: port=(%d:%d) take rx_data\n" pcb.id.local_port pcb.id.dest_port;
         lwt _ = match winadv with
           | None -> return ()
           | Some winadv -> begin
+              printf "[DEBUG] Rx.thread:\twinadv=%d\n" winadv;
               if (winadv > 0) then begin
                 Window.rx_advance wnd winadv;
                 ACK.receive ack (Window.rx_nxt wnd)
@@ -233,6 +235,7 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
          and tell the application that new space is available when it is blocked *)
       let rec tx_window_t () =
         lwt tx_wnd = Lwt_mvar.take tx_wnd_update in
+        printf "[DEBUG] Wnd.thread: taking tx_wnd_update tx_wnd=%d\n" tx_wnd;
         UTX.free utx tx_wnd >>
         tx_window_t ()
       in
@@ -300,7 +303,7 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     (* Set up ACK module *)
     let ack = ACK.t ~send_ack ~last:(Sequence.incr rx_isn) in
     (* Construct basic PCB in Syn_received state *)
-    let pcb = { state; rxq; txq; wnd; id; ack; urx; urx_close_t; urx_close_u; utx } in
+    let pcb = { state; rxq; txq; wnd; id; ack; urx; urx_close_t; urx_close_u; utx; cur_write_off = 0 } in
     (* Compose the overall thread from the various tx/rx threads
        and the main listener function *)
     let th =
@@ -332,10 +335,11 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     let txq, tx_t = TXS.q_of_sexp ~xmit:(Tx.xmit_pcb t.ip id) ~wnd ~state ~rx_ack ~tx_ack ~tx_wnd_update s_pcb.s_txq in
     let rxq = RXS.q_of_sexp ~rx_data ~wnd ~state ~tx_ack s_pcb.s_rxq in
     let ack = ACK.t_of_sexp ~send_ack s_pcb.s_ack in
-    let urx = User_buffer.Rx.t_of_sexp s_pcb.s_urx in
+    let rx_buf_size = Window.rx_wnd wnd in
+    let urx = User_buffer.Rx.t_of_sexp ~max_size:rx_buf_size ~wnd s_pcb.s_urx in
     let utx = UTX.t_of_sexp ~wnd ~txq s_pcb.s_utx in
     let urx_close_t, urx_close_u = Lwt.task () in
-    let pcb = { state; rxq; txq; wnd; id; ack; urx; urx_close_t; urx_close_u; utx } in
+    let pcb = { state; rxq; txq; wnd; id; ack; urx; urx_close_t; urx_close_u; utx; cur_write_off = 0 } in
     let th =
       (Tx.thread t pcb ~send_ack ~rx_ack) <?>
       (Rx.thread pcb ~rx_data) <?>
@@ -391,6 +395,8 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     restore_connection t ~listeners s_pcb_sexp
 
   let id t = Sexp.to_string (sexp_of_id t.id)
+
+  exception Write_suspended of int
 
   let resolve_wnd_scaling options rx_wnd_scaleoffer = 
     let tx_wnd_scale = List.fold_left
@@ -579,13 +585,17 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
       writefn pcb wfn first_bit  >>
       writefn pcb wfn remaing_bit
     | av_len -> 
-      wfn [data]
+      wfn [data] >>
+      return (pcb.cur_write_off <- pcb.cur_write_off + len)
 
   (* URG_TODO: raise exception when trying to write to closed connection
                instead of quietly returning *)
   (* Blocking write on a PCB *)
   let write pcb data = writefn pcb (UTX.write pcb.utx) data
-  let writev pcb data = Lwt_list.iter_s (fun d -> write pcb d) data
+  let writev pcb data =
+    pcb.cur_write_off <- 0;   (* FIXME: this should also be restored... *)
+    try_lwt Lwt_list.iter_s (fun d -> write pcb d) data
+    with UTX.Write_suspended -> Lwt.fail (Write_suspended pcb.cur_write_off)
 
   let write_nodelay pcb data = writefn pcb (UTX.write_nodelay pcb.utx) data
   let writev_nodelay pcb data = Lwt_list.iter_s (fun d -> write_nodelay pcb d) data

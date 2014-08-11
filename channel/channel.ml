@@ -35,6 +35,8 @@ module Make(Flow:V1_LWT.TCPV4) = struct
     mutable obuf: Cstruct.t option; (* Active write buffer *)
     mutable opos: int;                 (* Position in active write buffer *)
     mutable request: string option; (* in-flight request *)
+    mutable response: string option; (* in-flight response *)
+    mutable prev_obufq: Cstruct.t list;
     abort_t: unit Lwt.t;
     abort_u: unit Lwt.u;
   }
@@ -45,6 +47,7 @@ module Make(Flow:V1_LWT.TCPV4) = struct
     s_obuf: Cstruct.t option;
     s_opos: int;
     s_request: string option;
+    s_response: string option;
   } with sexp
 
   exception Closed
@@ -55,18 +58,26 @@ module Make(Flow:V1_LWT.TCPV4) = struct
     let obuf = None in
     let opos = 0 in
     let abort_t, abort_u = Lwt.task () in
-    { ibuf; obuf; flow; obufq; opos; abort_t; abort_u; request = None }
+    { ibuf; obuf; flow; obufq; opos; abort_t; abort_u; request = None; response = None; prev_obufq = []}
 
   let to_flow { flow } = flow
 
   let ibuf_refill t = 
     printf "[DEBUG] Channel.ibuf_refill\n";
-    match_lwt Flow.read t.flow with
-    | `Ok buf ->
-        t.ibuf <- Some buf;
-        return ()
-    | `Error _ | `Eof ->
+    match t.response with
+    |Some _ ->
+      printf "[DEBUG] Channel waiting for abort\n";
+      lwt _ = t.abort_t in
+      t.request <- Some "";
+      printf "[DEBUG] Channel aborted\n";
       fail Closed
+    |None ->
+      match_lwt Flow.read t.flow with
+      | `Ok buf ->
+          t.ibuf <- Some buf;
+          return ()
+      | `Error _ | `Eof ->
+        fail Closed
 
   let rec get_ibuf t =
     match t.ibuf with
@@ -211,12 +222,40 @@ module Make(Flow:V1_LWT.TCPV4) = struct
     write_string t buf 0 (String.length buf);
     write_char t '\n'
 
+  let restore_obufq t write_off =
+    printf "[DEBUG] flow.writev suspended at %d\n" write_off;
+    let rec ltrim t off write_off =
+      match t.prev_obufq with
+      | [] ->
+        printf "BUG: This must not happen! prev_obufq is gone or write_off is invalid\n"
+      | data::tl -> begin
+        let off' = off + (Cstruct.len data) in
+        if off' <= write_off then begin
+          t.prev_obufq <- tl;     (* trim and continue *)
+          ltrim t off' write_off;
+        end else begin
+          let opos = write_off - off in (* stop trimming *)
+          t.prev_obufq <- (Cstruct.shift data opos)::tl;
+        end
+      end
+    in
+    (* trim from prev_obufq data already written *)
+    ltrim t 0 write_off;
+    (* obufq maintains most recent data at its head *)
+    let l = List.rev t.prev_obufq in
+    t.prev_obufq <- [];
+    t.obufq <- l @ t.obufq
+
   let rec flush t =
     queue_obuf t;
     let l = List.rev t.obufq in
+    t.prev_obufq <- l;  (* keep it for suspend *)
     t.obufq <- [];
-    printf "[DEBUG] Channel.flush: call Flow.writev\n";
-    Flow.writev t.flow l
+    printf "[DEBUG] Channel.flush: call Flow.writev w/ len=%d\n" (List.length l);
+    try_lwt Flow.writev t.flow l
+    with Flow.Write_suspended write_off ->
+      restore_obufq t write_off;
+      Lwt.fail (Flow.Write_suspended write_off)
  
   let close t =
     flush t
@@ -226,20 +265,28 @@ module Make(Flow:V1_LWT.TCPV4) = struct
   let get_request t = t.request
 
   let set_request t req = t.request <- req
+  
+  let get_response t = t.response
+
+  let set_response t req = t.response <- req
 
   let get_state ic oc =
     let s_ibuf = match ic.ibuf with
     | None -> None
     | Some buf when Cstruct.len buf = 0 -> None
     | Some buf -> Some buf in
-    let s_t = {s_ibuf; s_obufq = oc.obufq; s_obuf = oc.obuf; s_opos = oc.opos; s_request = ic.request} in
+    let s_t = {s_ibuf; s_obufq = oc.obufq; s_obuf = oc.obuf; s_opos = oc.opos;
+      s_request = ic.request; s_response = oc.response} in
+    Lwt.wakeup ic.abort_u ();
     Sexp.to_string (sexp_of_t_snapshot s_t)
 
   let set_state ic oc state =
     let s_t = t_snapshot_of_sexp (Sexp.of_string state) in
+    printf "[DEBUG] Channel.set_state: opos=%d\n" s_t.s_opos;
     ic.ibuf <- s_t.s_ibuf;
     oc.obufq <- s_t.s_obufq;
     oc.obuf <- s_t.s_obuf;
     oc.opos <- s_t.s_opos;
     ic.request <- s_t.s_request;
+    oc.response <- s_t.s_response;
 end

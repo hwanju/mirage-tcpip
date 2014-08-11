@@ -111,3 +111,4 @@ let input t ~listeners =
 let get_state t sexp = None
 let set_state t ~listeners sexp = None
 let string_of_id t = ""
+exception Write_suspended of int

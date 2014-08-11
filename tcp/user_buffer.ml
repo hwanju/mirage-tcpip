@@ -36,24 +36,21 @@ module Rx = struct
 
   type t_snapshot = {
     s_q: Cstruct.t option list;
-    s_wnd: Window.t;
-    s_max_size: int32;
     s_cur_size: int32;
   } with sexp
 
   let sexp_of_t t =
     let s_q = Lwt_sequence.fold_r (fun seg acc -> seg::acc) t.q [] in
-    sexp_of_t_snapshot {s_q; s_wnd = t.wnd; s_max_size = t.max_size; s_cur_size = t.cur_size}
+    sexp_of_t_snapshot {s_q; s_cur_size = t.cur_size}
 
-  let t_of_sexp t_sexp =
+  let t_of_sexp ~max_size ~wnd t_sexp =
     let s_t = t_snapshot_of_sexp t_sexp in
     let q = List.fold_left (fun acc seg -> ignore(Lwt_sequence.add_r seg acc); acc)
                             (Lwt_sequence.create ()) s_t.s_q in
     let writers = Lwt_sequence.create () in
     let readers = Lwt_sequence.create () in
     let watcher = None in
-    { q; wnd = s_t.s_wnd; writers; readers; max_size = s_t.s_max_size;
-      cur_size = s_t.s_cur_size; watcher }
+    { q; wnd; writers; readers; max_size; cur_size = s_t.s_cur_size; watcher }
   
   let create ~max_size ~wnd =
     let q = Lwt_sequence.create () in
@@ -76,7 +73,7 @@ module Rx = struct
     | Some b -> Cstruct.len b
 
   let add_r t s =
-    printf "[DEBUG] User_buffer.Rx.add_r: cur_size=%lu max_size=%lu\n" t.cur_size t.max_size;
+    printf "[DEBUG] URX.add_r: cur_size=%lu max_size=%lu\n" t.cur_size t.max_size;
     if t.cur_size > t.max_size then
       let th,u = Lwt.task () in
       let node = Lwt_sequence.add_r u t.writers in
@@ -135,12 +132,14 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
 
   type t = {
     wnd: Window.t;
-    writers: unit Lwt.u Lwt_sequence.t;
+    writers: bool Lwt.u Lwt_sequence.t;
     txq: TXS.q;
     buffer: Cstruct.t Lwt_sequence.t;
     max_size: int32;
     mutable bufbytes: int32;
   }
+
+  exception Write_suspended
 
   type t_snapshot = {
     s_buffer: Cstruct.t list;
@@ -150,6 +149,12 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
 
   let sexp_of_t t =
     let s_buffer = Lwt_sequence.fold_r (fun seg acc -> seg::acc) t.buffer [] in
+    (* XXX: Lwt cancel test *)
+    let wake_writer () = 
+      match Lwt_sequence.take_opt_l t.writers with
+      | None -> ()
+      | Some w -> Lwt.wakeup w false in
+    wake_writer ();
     sexp_of_t_snapshot {s_buffer; s_max_size = t.max_size; s_bufbytes = t.bufbytes}
 
   let t_of_sexp ~wnd ~txq t_sexp =
@@ -194,8 +199,12 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
       let th,u = Lwt.task () in
       let node = Lwt_sequence.add_r u t.writers in
       Lwt.on_cancel th (fun _ -> Lwt_sequence.remove node);
-      th >>
-      wait_for t sz
+      printf "[DEBUG] UTX.wait_for: sz=%d\n" (Int32.to_int sz);
+      th >>= function
+      | true -> wait_for t sz
+      | false -> 
+          printf "[DEBUG] try to cancel a writer\n";
+          Lwt.fail Write_suspended
     end
 
   let compactbufs bl =
@@ -222,11 +231,15 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
       let th,u = Lwt.task () in
       let node = Lwt_sequence.add_r u t.writers in
       Lwt.on_cancel th (fun _ -> Lwt_sequence.remove node);
-      th >>
-      wait_for_flushed t
+      th >>= function
+      | true -> wait_for_flushed t
+      | false -> 
+          printf "[DEBUG] try to cancel a writer\n";
+          Lwt.fail Write_suspended
     end
 
   let rec clear_buffer t = 
+    printf "[DEBUG] UTX.clear_buffer\n";
     let rec addon_more curr_data l =
       match Lwt_sequence.take_opt_l t.buffer with
       | None ->
@@ -281,7 +294,7 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
 
   (* Chunk up the segments into MSS max for transmission *)
   let transmit_segments ~mss ~txq datav =
-    printf "[DEBUG] User_buffer.Tx.transmit_segments\n";
+    printf "[DEBUG] UTX.transmit_segments\n";
     let transmit acc = 
       let b = compactbufs (List.rev acc) in
       TXS.output ~flags:Segment.Psh txq b
@@ -308,7 +321,7 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
   let write t datav =
     let l = lenv datav in
     let mss = Int32.of_int (Window.tx_mss t.wnd) in
-    printf "[DEBUG] User_buffer.TX.write: len=%lu mss=%lu\n" l mss;
+    printf "[DEBUG] UTX.write: len=%lu mss=%lu\n" l mss;
     match Lwt_sequence.is_empty t.buffer &&
       (l = mss || not (Window.tx_inflight t.wnd)) with
     | false -> 
@@ -352,7 +365,8 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
     match Lwt_sequence.take_opt_l t.writers with
     | None -> return ()
     | Some w ->
-	Lwt.wakeup w ();
+  printf "[DEBUG] UTX.inform: wakeup\n";
+	Lwt.wakeup w true;
 	return ()
 
   (* Indicate that more bytes are available for waiting writers.
@@ -360,6 +374,7 @@ module Tx(Time:V1_LWT.TIME)(Clock:V1.CLOCK) = struct
      should be passed as unscaled (i.e. from the wire) here.
      Window will internally scale it up. *)
   let free t sz =
+    printf "[DEBUG] UTX.free: sz=%d\n" sz;
     clear_buffer t >>
     inform_app t
    
