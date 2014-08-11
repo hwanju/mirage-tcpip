@@ -91,7 +91,7 @@ module Rx = struct
         ignore(Lwt_sequence.add_r s t.q);
         notify_size_watcher t
       |Some u -> 
-        return (Lwt.wakeup u s)
+        return (Lwt.wakeup_later u s)   (* XXX: currently for consistent state snapshot *)
       );
     end
       
