@@ -324,6 +324,7 @@ module Make(Ipv4:V1_LWT.IPV4)(Time:V1_LWT.TIME)(Clock:V1.CLOCK)(Random:V1.RANDOM
     (* some codes can be shared with new_pcb later on: currently no touch on * new_pcb *)
     let s_pcb = pcb_snapshot_of_sexp s_pcb_sexp in
     let id = id_of_sexp s_pcb.s_id in
+    let id = {id with local_ip = (Ipv4.get_ipv4 t.ip)} in
     let wnd = Window.t_of_sexp s_pcb.s_wnd in
     let rx_ack = Lwt_mvar.create_empty () in
     let tx_ack = Lwt_mvar.create_empty () in
